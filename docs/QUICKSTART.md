@@ -21,16 +21,14 @@ pkg install proot-distro
 proot-distro install debian
 ```
 
-## 2. 安装业务套件
-
-### 方法一：自动安装（推荐）
+## 2. 安装业务套件（Debian proot）
 
 ```bash
 # 进入 proot 环境
 proot-distro login debian
 
 # 克隆仓库
-git clone https://github.com/YOUR_USERNAME/termux-proot-services.git
+git clone https://github.com/Thankyou-Cheems/termux-proot-services.git
 cd termux-proot-services
 
 # 运行安装脚本
@@ -38,33 +36,16 @@ chmod +x install.sh
 ./install.sh
 ```
 
-### 方法二：手动安装
-
-```bash
-# 进入 proot
-proot-distro login debian
-
-# 安装依赖
-apt update && apt upgrade -y
-apt install -y wget curl unzip git nodejs pnpm sqlite3
-
-# 安装 PM2
-npm install -g pm2
-
-# 下载服务
-# 参考 install.sh 中的步骤手动执行
-```
-
 ## 3. 配置服务
 
 ### ASF 配置
 
 ```bash
-# 编辑主配置
 nano /opt/ASF/config/ASF.json
 ```
 
-修改以下内容：
+示例：
+
 ```json
 {
   "IPCPassword": "你的安全密码",
@@ -72,76 +53,91 @@ nano /opt/ASF/config/ASF.json
 }
 ```
 
-添加 Steam 账号：
-```bash
-# 复制 bot 配置模板
-cp /opt/ASF/config/Squad.json /opt/ASF/config/MyBot.json
-
-# 编辑配置
-nano /opt/ASF/config/MyBot.json
-```
-
 ### MCSManager 配置
 
-首次访问 Web 面板会引导你完成初始设置。
+首次访问 Web 面板按引导完成初始化。
 
-## 4. 启动服务
+## 4. 启动与检查（proot 内）
 
 ```bash
-# 所有服务已通过 PM2 自动启动
 pm2 list
-
-# 查看日志
 pm2 logs
-
-# 重启服务
 pm2 restart all
 ```
 
-## 5. 访问服务
+## 5. 配置外层 Termux 开机自启与会话保活
 
-- **MCSManager**: http://localhost:23333
-- **ASF IPC**: http://localhost:1242 (需要密码)
-
-## 6. 配置开机自启
-
-在 Termux 中创建启动脚本：
+在 **Termux 外层**（不是 proot）执行：
 
 ```bash
-# 在 Termux (不是 proot) 中编辑
-nano ~/.termux/boot-services.sh
+# 克隆同一个仓库到外层 Termux
+cd ~
+git clone https://github.com/Thankyou-Cheems/termux-proot-services.git
+cd termux-proot-services
+
+# 写入启动脚本
+cp templates/termux/start-debian-tmux.sh ~/start-debian-tmux.sh
+chmod +x ~/start-debian-tmux.sh
+
+# 写入 Termux:Boot 脚本
+mkdir -p ~/.termux/boot
+cp templates/termux/boot/start-debian.sh ~/.termux/boot/start-debian.sh
+chmod +x ~/.termux/boot/start-debian.sh
+
+# 追加交互 shell 自动启动片段（避免非交互命令触发）
+if ! grep -q "start-debian-tmux.sh" ~/.bashrc 2>/dev/null; then
+  cat templates/termux/bashrc.snippet >> ~/.bashrc
+fi
 ```
 
-添加内容：
-```bash
-#!/data/data/com.termux/files/usr/bin/bash
-proot-distro login debian -- sudo service ssh start
-proot-distro login debian -- pm2 resurrect
+依赖要求：
+
+- 安装 App: `Termux:Boot`
+- 安装 App: `Termux:API`
+- 安装包: `termux-api`
+
+## 6. Windows 侧 SSH 别名（推荐）
+
+`C:\Users\<你>\.ssh\config`：
+
+```sshconfig
+Host termux
+    HostName <PHONE_IP>
+    Port 8022
+    User u0_a6
+
+Host proot-debian
+    HostName <PHONE_IP>
+    Port 2222
+    User root
 ```
 
-## 7. VSCode Remote SSH 配置
+验证：
 
-1. 安装 VSCode Remote SSH 扩展
-2. 添加 SSH 主机：`ssh root@localhost -p 2222`
-3. 连接即可远程编辑 proot 内的文件
+```powershell
+ssh termux "whoami; id -u; grep TracerPid /proc/self/status"
+ssh proot-debian "whoami; id -u"
+```
 
-## 常见问题
+预期：
 
-### Q: 服务无法启动
-A: 检查 PM2 日志 `pm2 logs`，确认端口未被占用
+- `termux` 为 `u0_a*` + uid `100xx`
+- `proot-debian` 为 `root` + uid `0`
 
-### Q: 网络无法访问
-A: 确保 proot-distro 正确配置了网络绑定
-
-### Q: 如何备份配置
-A: 运行 `/opt/update-all.sh` 会自动备份所有配置
-
-### Q: 更新失败怎么办
-A: 运行 `/opt/rollback.sh` 回滚到之前的版本
-
-## 8. 可选：部署 Aria2 + AriaNg + Caddy
+## 7. 可选：部署 Aria2 + AriaNg + Caddy
 
 ```bash
 # 在 Debian proot 中执行
 /opt/deploy-aria2.sh
 ```
+
+## 常见问题
+
+### Q: `ssh termux` 进去是 root，为什么？
+A: 你连接到的是嵌套/被追踪上下文，不是外层 Termux。应确保 `termux` 别名连的是 `8022` 外层监听，并验证 `TracerPid: 0`。
+
+### Q: 外层 8022 连接后立即断开
+A: 先在外层执行 `~/start-debian-tmux.sh`，它会尝试拉起外层 `sshd -p 8022`。
+
+### Q: 更新失败怎么办
+A: 运行 `/opt/rollback.sh` 回滚到最近备份。

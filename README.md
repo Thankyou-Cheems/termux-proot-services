@@ -73,6 +73,12 @@ Expected:
 - Start `tmux` session (`debian`) with `setsid` to survive SSH disconnect.
 - Inside proot: run `service ssh start`, `pm2 resurrect`, then keep shell alive.
 
+Template files in this repo:
+
+- `templates/termux/start-debian-tmux.sh`
+- `templates/termux/boot/start-debian.sh`
+- `templates/termux/bashrc.snippet`
+
 ### 2) Termux:Boot entry
 
 `~/.termux/boot/start-debian.sh`:
