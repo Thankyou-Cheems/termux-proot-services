@@ -1,210 +1,235 @@
-# 🚀 Termux proot 业务管理套件
+# Termux PRoot Services
 
-> 在 Android Termux + proot-distro 环境下运行的轻量级业务管理方案
+在 Android Termux + Debian proot-distro 环境下，提供可长期维护的服务部署与运维方案。
 
-## 📦 包含服务
+## Scope
 
-| 服务 | 说明 | 端口 |
-|------|------|------|
-| **ArchiSteamFarm** | Steam 自动挂卡 | IPC: 1242 |
-| **MCSManager** | Minecraft 服务器管理面板 | Web: 23333 / 守护：24444 |
-| **Aria2 + AriaNg + Caddy** | 下载管理与 Web 面板 | Web: 80 / RPC: 6800 |
-| **PM2** | 进程管理 & 自启 | - |
+本仓库覆盖以下目标：
 
-## 🎯 特性
+- 统一部署 ArchiSteamFarm、MCSManager、Aria2 + AriaNg + Caddy。
+- 通过多层 SSH 别名区分 Termux 外层与 Debian proot。
+- 支持开机自启动、会话保活、断线可恢复。
+- 提供更新、回滚、故障排查、恢复部署实践。
 
-- ✅ 专为 **Termux + proot-distro** 优化
-- ✅ 支持 **VSCode Remote SSH** 远程开发
-- ✅ 使用 **Gitee 镜像源** 加速下载
-- ✅ 完整的配置备份 & 回滚机制
-- ✅ 使用 **pnpm** 管理 Node.js 依赖
-- ✅ 一键安装/更新/回滚
+## Services And Ports
 
-## 📋 系统要求
+| Service | Purpose | Default Ports |
+|---|---|---|
+| ArchiSteamFarm | Steam automation | IPC 1242 |
+| MCSManager | Minecraft panel and daemon | Web 23333, Daemon 24444 |
+| Aria2 + AriaNg + Caddy | Download service and web UI | Web 80, RPC 6800 |
+| SSH (outer Termux) | Remote entry for Termux user | 8022 |
+| SSH (Debian proot) | Remote entry for proot root | 2222 |
 
-- Android 设备
-- Termux (F-Droid 版本推荐)
-- proot-distro 已安装
-- Debian 11+ (proot 环境)
+## Architecture
 
-## 🚀 快速开始
+- Layer 1: **Outer Termux** (`u0_a*` app user)
+  - Responsible for boot orchestration, outer SSH, and entry scripts.
+- Layer 2: **Debian proot** (`root` inside proot view)
+  - Runs business services and internal SSH.
 
-### 1. 安装 Termux 和 proot-distro
+Recommended access split:
 
-```bash
-# Termux 内安装 proot-distro
-pkg update
-pkg install proot-distro
-proot-distro install debian
+- `ssh termux` -> outer Termux (`u0_a*`, port `8022`)
+- `ssh proot-debian` -> Debian proot (`root`, port `2222`)
+
+## SSH Topology (Windows Client)
+
+`~/.ssh/config` example:
+
+```sshconfig
+Host termux
+    HostName <PHONE_IP>
+    Port 8022
+    User u0_a6
+
+Host proot-debian
+    HostName <PHONE_IP>
+    Port 2222
+    User root
 ```
 
-### 2. 启动 proot 并安装本套件
+Verification:
+
+```powershell
+ssh termux "whoami; id -u; grep TracerPid /proc/self/status"
+ssh proot-debian "whoami; id -u"
+```
+
+Expected:
+
+- `termux`: `u0_a*`, uid `100xx`, `TracerPid: 0`
+- `proot-debian`: `root`, uid `0`
+
+## Boot And Session Persistence
+
+### 1) Outer launcher script
+
+`~/start-debian-tmux.sh` responsibilities:
+
+- Acquire wake lock (`termux-wake-lock`).
+- Ensure outer SSH (`sshd -p 8022`) is available.
+- Skip if tmux session already exists.
+- Start `tmux` session (`debian`) with `setsid` to survive SSH disconnect.
+- Inside proot: run `service ssh start`, `pm2 resurrect`, then keep shell alive.
+
+### 2) Termux:Boot entry
+
+`~/.termux/boot/start-debian.sh`:
 
 ```bash
-# 进入 proot 环境
+#!/data/data/com.termux/files/usr/bin/bash
+sleep 5
+~/start-debian-tmux.sh
+```
+
+### 3) Interactive shell auto-start
+
+`~/.bashrc`:
+
+```bash
+case $- in
+  *i*) ~/start-debian-tmux.sh ;;
+esac
+```
+
+This avoids triggering startup during non-interactive SSH command execution.
+
+### Required apps/packages
+
+- App: `Termux:Boot`
+- App: `Termux:API`
+- Package: `termux-api`
+
+## Remote Stability Strategy
+
+- Keep business runtime in tmux session `debian`.
+- Use PM2 for service process persistence (`pm2 save`, `pm2 resurrect`).
+- Separate outer SSH and proot SSH ports to reduce coupling.
+- Use idempotent startup scripts (safe to run repeatedly).
+
+Common operations:
+
+```bash
+ssh termux
+~/start-debian-tmux.sh
+tmux ls
+
+ssh proot-debian
+pm2 list
+pm2 logs
+```
+
+## Failure Patterns And Fixes
+
+### Symptom: `ssh termux` enters `root` unexpectedly
+
+Cause: connected to a traced/nested SSH context, not true outer Termux.
+
+Check:
+
+```bash
+whoami
+id -u
+grep TracerPid /proc/self/status
+```
+
+Fix target state:
+
+- `whoami` is `u0_a*`
+- `id -u` is `100xx`
+- `TracerPid` is `0`
+
+### Symptom: `Connection closed by <ip> port 8022`
+
+Cause: outer Termux SSH listener not running or unhealthy.
+
+Actions:
+
+- Start/restart outer `sshd` in outer Termux context.
+- Re-verify with `ssh termux "whoami; id -u"`.
+
+### Symptom: `proot-distro should not be executed under PRoot`
+
+Cause: trying to run `proot-distro login` from an already nested/proot context.
+
+Action:
+
+- Run launcher from outer Termux user context (`u0_a*`), not nested root view.
+
+## Repository Usage
+
+### Install
+
+```bash
 proot-distro login debian
-
-# 克隆本仓库
-git clone https://github.com/YOUR_USERNAME/termux-proot-services.git
+git clone https://github.com/Thankyou-Cheems/termux-proot-services.git
 cd termux-proot-services
-
-# 运行安装脚本
 ./install.sh
 ```
 
-### 3. 访问服务
+### Update and rollback
 
-- **MCSManager Web**: http://localhost:23333
-- **ASF IPC**: http://localhost:1242 (需要密码)
-- **AriaNg**: http://localhost (部署 Aria2 后)
+```bash
+/opt/update-all.sh
+/opt/update-asf.sh
+/opt/update-mcs.sh
+/opt/deploy-aria2.sh
+/opt/rollback.sh
+```
 
-## 📁 目录结构
+## Key Management Policy
+
+Recommended model:
+
+- Public repo operations: one account key (`github-global`).
+- Sensitive/private repo operations: per-repo deploy key (`github-recovery-kit`).
+
+Example `/root/.ssh/config`:
+
+```sshconfig
+Host github-global
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/github_key
+  IdentitiesOnly yes
+
+Host github-recovery-kit
+  HostName github.com
+  User git
+  IdentityFile /root/.ssh/id_ed25519_termux_recovery
+  IdentitiesOnly yes
+```
+
+Why:
+
+- Reduces blast radius if one key is compromised.
+- Keeps automation repository-scoped.
+- Avoids mixing public and private write credentials.
+
+## Directory Layout
 
 ```text
 /opt/
-├── ASF/                    # ArchiSteamFarm
-│   ├── config/             # ASF 配置文件
-│   └── ArchiSteamFarm      # 主程序
-├── mcsmanager/             # MCSManager
-│   ├── daemon/             # 守护进程
-│   └── web/                # Web 面板
-├── aria2/                  # Aria2 配置/数据/日志
-├── ariang/                 # AriaNg 静态页面
-├── caddy/                  # Caddy 配置
-├── backups/                # 自动备份目录
-├── update-all.sh           # 全量更新脚本
-├── update-asf.sh           # ASF 更新脚本
-├── update-mcs.sh           # MCSManager 更新脚本
-├── deploy-aria2.sh         # Aria2 + AriaNg + Caddy 部署
-└── rollback.sh             # 回滚脚本
+├── ASF/
+├── mcsmanager/
+├── aria2/
+├── ariang/
+├── caddy/
+├── backups/
+├── update-all.sh
+├── update-asf.sh
+├── update-mcs.sh
+├── deploy-aria2.sh
+└── rollback.sh
 ```
 
-## 🔧 常用命令
+## References
 
-### PM2 管理
-
-```bash
-pm2 list              # 查看服务状态
-pm2 logs              # 查看日志
-pm2 restart all       # 重启所有服务
-pm2 save --force      # 保存进程列表
-pm2 monit             # 实时监控
-```
-
-### 更新服务
-
-```bash
-# 更新所有服务
-/opt/update-all.sh
-
-# 仅更新 ASF
-/opt/update-asf.sh
-
-# 仅更新 MCSManager
-/opt/update-mcs.sh
-
-# 部署/重建 Aria2 + AriaNg + Caddy
-/opt/deploy-aria2.sh
-```
-
-### 回滚
-
-```bash
-# 回滚到上次备份
-/opt/rollback.sh
-```
-
-## ⚙️ 配置说明
-
-### ASF 配置
-
-编辑 `/opt/ASF/config/ASF.json`:
-
-```json
-{
-  "Headless": true,
-  "IPCPassword": "你的密码",
-  "SteamOwnerID": 你的 SteamID
-}
-```
-
-编辑 bot 配置 `/opt/ASF/config/<bot 名>.json`:
-
-```json
-{
-  "Enabled": true,
-  "SteamLogin": "账号",
-  "SteamPassword": "密码",
-  "SteamSteamGuard": "2FA 代码 (可选)"
-}
-```
-
-### MCSManager 配置
-
-- **Web 面板**: `/opt/mcsmanager/web/data/SystemConfig/config.json`
-- **守护进程**: `/opt/mcsmanager/daemon/data/Config/global.json`
-
-### Aria2 配置
-
-- **Aria2 主配置**: `/opt/aria2/config/aria2.conf`
-- **RPC 密钥文件**: `/opt/aria2/config/rpc-secret.txt`
-- **Caddy 配置**: `/opt/caddy/Caddyfile`
-
-## 🔒 安全建议
-
-1. 修改默认密码
-2. 仅在信任的网络环境使用
-3. 定期备份配置
-4. 不要以 root 运行（proot 内风险可控）
-
-## 📝 备份策略
-
-每次更新前自动备份到 `/opt/backups/日期_时间/`
-
-备份内容包括:
-- ASF 配置文件
-- MCSManager 所有配置
-- 实例配置
-
-## 🐛 故障排除
-
-### 服务无法启动
-
-```bash
-# 查看 PM2 日志
-pm2 logs
-
-# 重启服务
-pm2 restart <服务名>
-```
-
-### 配置丢失
-
-```bash
-# 从备份恢复
-/opt/rollback.sh
-```
-
-### 网络问题
-
-确保 proot 启动时正确配置了网络绑定。
-
-## 📄 License
-
-MIT License
-
-## 🙏 致谢
-
-- [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm)
-- [MCSManager](https://github.com/MCSManager/MCSManager)
-- [proot-distro](https://github.com/termux/proot-distro)
-- [PM2](https://github.com/Unitech/pm2)
-- [Aria2](https://github.com/aria2/aria2)
-- [AriaNg](https://github.com/mayswind/AriaNg)
-- [Caddy](https://github.com/caddyserver/caddy)
-
-## 📱 相关资源
-
-- [Termux 官网](https://termux.dev/)
-- [proot-distro 文档](https://github.com/termux/proot-distro)
-- [VSCode Remote SSH](https://code.visualstudio.com/docs/remote/ssh)
+- Termux: https://termux.dev/
+- proot-distro: https://github.com/termux/proot-distro
+- ArchiSteamFarm: https://github.com/JustArchiNET/ArchiSteamFarm
+- MCSManager: https://github.com/MCSManager/MCSManager
+- Aria2: https://github.com/aria2/aria2
+- AriaNg: https://github.com/mayswind/AriaNg
+- Caddy: https://github.com/caddyserver/caddy
