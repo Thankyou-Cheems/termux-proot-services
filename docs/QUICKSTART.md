@@ -1,104 +1,69 @@
-# 快速入门指南
+# Quickstart
 
-## 1. 准备工作
+## 1. Prerequisites
 
-### 安装 Termux
+On Android:
 
-从 F-Droid 下载 Termux（推荐）或 GitHub Releases：
-- [F-Droid](https://f-droid.org/packages/com.termux/)
-- [GitHub](https://github.com/termux/termux-app/releases)
+- Install `Termux` (F-Droid recommended)
+- Install `Termux:Boot`
+- Install `Termux:API`
 
-### 基础设置
+In outer Termux:
 
 ```bash
-# 更新包
-pkg update && pkg upgrade
-
-# 安装 proot-distro
-pkg install proot-distro
-
-# 安装 Debian
-proot-distro install debian
+pkg update -y
+pkg upgrade -y
+pkg install -y proot-distro termux-api openssh tmux
 ```
 
-## 2. 安装业务套件（Debian proot）
+## 2. Debian proot setup
 
 ```bash
-# 进入 proot 环境
+proot-distro install debian
 proot-distro login debian
+```
 
-# 克隆仓库
+In Debian:
+
+```bash
 git clone https://github.com/Thankyou-Cheems/termux-proot-services.git
 cd termux-proot-services
-
-# 运行安装脚本
 chmod +x install.sh
 ./install.sh
 ```
 
-## 3. 配置服务
+This deploys runtime scripts to `/opt`:
 
-### ASF 配置
+- `/opt/update.sh`
+- `/opt/deploy-aria2.sh`
+- `/opt/rollback.sh`
+- `/opt/service/*`
 
-```bash
-nano /opt/ASF/config/ASF.json
-```
+## 3. Outer Termux startup templates
 
-示例：
-
-```json
-{
-  "IPCPassword": "你的安全密码",
-  "SteamOwnerID": 你的 SteamID64
-}
-```
-
-### MCSManager 配置
-
-首次访问 Web 面板按引导完成初始化。
-
-## 4. 启动与检查（proot 内）
+In outer Termux (not inside proot):
 
 ```bash
-pm2 list
-pm2 logs
-pm2 restart all
-```
-
-## 5. 配置外层 Termux 开机自启与会话保活
-
-在 **Termux 外层**（不是 proot）执行：
-
-```bash
-# 克隆同一个仓库到外层 Termux
 cd ~
 git clone https://github.com/Thankyou-Cheems/termux-proot-services.git
 cd termux-proot-services
 
-# 写入启动脚本
-cp templates/termux/start-debian-tmux.sh ~/start-debian-tmux.sh
-chmod +x ~/start-debian-tmux.sh
+cp templates/termux/start-services.sh ~/start-services.sh
+cp templates/termux/proot-debian-bootstrap.sh ~/proot-debian-bootstrap.sh
+chmod +x ~/start-services.sh ~/proot-debian-bootstrap.sh
 
-# 写入 Termux:Boot 脚本
 mkdir -p ~/.termux/boot
-cp templates/termux/boot/start-debian.sh ~/.termux/boot/start-debian.sh
-chmod +x ~/.termux/boot/start-debian.sh
+cp templates/termux/boot/00-start-services.sh ~/.termux/boot/00-start-services.sh
+chmod +x ~/.termux/boot/00-start-services.sh
 
-# 追加交互 shell 自动启动片段（避免非交互命令触发）
-if ! grep -q "start-debian-tmux.sh" ~/.bashrc 2>/dev/null; then
+if ! grep -q 'start-services.sh' ~/.bashrc 2>/dev/null; then
   cat templates/termux/bashrc.snippet >> ~/.bashrc
 fi
 ```
 
-依赖要求：
+## 4. Windows SSH aliases
 
-- 安装 App: `Termux:Boot`
-- 安装 App: `Termux:API`
-- 安装包: `termux-api`
-
-## 6. Windows 侧 SSH 别名（推荐）
-
-`C:\Users\<你>\.ssh\config`：
+`C:\Users\<you>\.ssh\config`:
 
 ```sshconfig
 Host termux
@@ -112,32 +77,35 @@ Host proot-debian
     User root
 ```
 
-验证：
+Verification:
 
 ```powershell
 ssh termux "whoami; id -u; grep TracerPid /proc/self/status"
 ssh proot-debian "whoami; id -u"
 ```
 
-预期：
+## 5. Update and rollback
 
-- `termux` 为 `u0_a*` + uid `100xx`
-- `proot-debian` 为 `root` + uid `0`
-
-## 7. 可选：部署 Aria2 + AriaNg + Caddy
+In Debian proot:
 
 ```bash
-# 在 Debian proot 中执行
-/opt/deploy-aria2.sh
+/opt/update.sh all
+/opt/update.sh asf
+/opt/update.sh mcs
+/opt/update.sh aria2
+
+/opt/rollback.sh
 ```
 
-## 常见问题
+## 6. Aria2/Caddy notes
 
-### Q: `ssh termux` 进去是 root，为什么？
-A: 你连接到的是嵌套/被追踪上下文，不是外层 Termux。应确保 `termux` 别名连的是 `8022` 外层监听，并验证 `TracerPid: 0`。
+- Aria2 + AriaNg + Caddy deployment: `/opt/deploy-aria2.sh`
+- Caddy config: `/opt/caddy/Caddyfile`
+- ASF upstream setting: `/opt/caddy/upstreams.env`
 
-### Q: 外层 8022 连接后立即断开
-A: 先在外层执行 `~/start-debian-tmux.sh`，它会尝试拉起外层 `sshd -p 8022`。
+If phone LAN IP changes, update:
 
-### Q: 更新失败怎么办
-A: 运行 `/opt/rollback.sh` 回滚到最近备份。
+```bash
+ASF_UPSTREAM=<new_phone_ip>:1242
+pm2 restart caddy --update-env
+```

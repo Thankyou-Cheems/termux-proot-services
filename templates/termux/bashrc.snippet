@@ -1,4 +1,6 @@
-# Auto-start Debian tmux session (interactive shells only)
+# Auto-start outer services for interactive Termux shells.
 case $- in
-  *i*) ~/start-debian-tmux.sh ;;
+  *i*)
+    "$HOME/start-services.sh" >/dev/null 2>&1 || true
+    ;;
 esac

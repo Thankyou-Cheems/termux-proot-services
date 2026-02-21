@@ -1,0 +1,34 @@
+# Caddy unified reverse proxy
+# Access entrypoint: :8080
+
+:8080 {
+  route {
+    # Normalize sub-path access.
+    redir /mcs /mcs/ 308
+    redir /asf /asf/ 308
+
+    # Aria2 RPC
+    handle /jsonrpc* {
+      reverse_proxy localhost:6800
+    }
+    handle /ws {
+      reverse_proxy localhost:6800
+    }
+
+    # MCSManager panel
+    handle /mcs/* {
+      uri strip_prefix /mcs
+      reverse_proxy localhost:23333
+    }
+
+    # ASF web
+    handle /asf/* {
+      uri strip_prefix /asf
+      reverse_proxy {$ASF_UPSTREAM:10.126.126.4:1242}
+    }
+
+    # Default static site: AriaNg
+    root * /opt/ariang
+    file_server
+  }
+}
