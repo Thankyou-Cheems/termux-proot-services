@@ -8,6 +8,7 @@
 |------|------|------|
 | **ArchiSteamFarm** | Steam 自动挂卡 | IPC: 1242 |
 | **MCSManager** | Minecraft 服务器管理面板 | Web: 23333 / 守护：24444 |
+| **Aria2 + AriaNg + Caddy** | 下载管理与 Web 面板 | Web: 80 / RPC: 6800 |
 | **PM2** | 进程管理 & 自启 | - |
 
 ## 🎯 特性
@@ -55,22 +56,27 @@ cd termux-proot-services
 
 - **MCSManager Web**: http://localhost:23333
 - **ASF IPC**: http://localhost:1242 (需要密码)
+- **AriaNg**: http://localhost (部署 Aria2 后)
 
 ## 📁 目录结构
 
-```
+```text
 /opt/
 ├── ASF/                    # ArchiSteamFarm
-│   ├── config/            # ASF 配置文件
-│   └── ArchiSteamFarm     # 主程序
-├── mcsmanager/            # MCSManager
-│   ├── daemon/           # 守护进程
-│   └── web/              # Web 面板
-├── backups/              # 自动备份目录
-├── update-all.sh         # 全量更新脚本
-├── update-asf.sh         # ASF 更新脚本
-├── update-mcs.sh         # MCSManager 更新脚本
-└── rollback.sh           # 回滚脚本
+│   ├── config/             # ASF 配置文件
+│   └── ArchiSteamFarm      # 主程序
+├── mcsmanager/             # MCSManager
+│   ├── daemon/             # 守护进程
+│   └── web/                # Web 面板
+├── aria2/                  # Aria2 配置/数据/日志
+├── ariang/                 # AriaNg 静态页面
+├── caddy/                  # Caddy 配置
+├── backups/                # 自动备份目录
+├── update-all.sh           # 全量更新脚本
+├── update-asf.sh           # ASF 更新脚本
+├── update-mcs.sh           # MCSManager 更新脚本
+├── deploy-aria2.sh         # Aria2 + AriaNg + Caddy 部署
+└── rollback.sh             # 回滚脚本
 ```
 
 ## 🔧 常用命令
@@ -96,6 +102,9 @@ pm2 monit             # 实时监控
 
 # 仅更新 MCSManager
 /opt/update-mcs.sh
+
+# 部署/重建 Aria2 + AriaNg + Caddy
+/opt/deploy-aria2.sh
 ```
 
 ### 回滚
@@ -134,6 +143,12 @@ pm2 monit             # 实时监控
 
 - **Web 面板**: `/opt/mcsmanager/web/data/SystemConfig/config.json`
 - **守护进程**: `/opt/mcsmanager/daemon/data/Config/global.json`
+
+### Aria2 配置
+
+- **Aria2 主配置**: `/opt/aria2/config/aria2.conf`
+- **RPC 密钥文件**: `/opt/aria2/config/rpc-secret.txt`
+- **Caddy 配置**: `/opt/caddy/Caddyfile`
 
 ## 🔒 安全建议
 
@@ -184,6 +199,9 @@ MIT License
 - [MCSManager](https://github.com/MCSManager/MCSManager)
 - [proot-distro](https://github.com/termux/proot-distro)
 - [PM2](https://github.com/Unitech/pm2)
+- [Aria2](https://github.com/aria2/aria2)
+- [AriaNg](https://github.com/mayswind/AriaNg)
+- [Caddy](https://github.com/caddyserver/caddy)
 
 ## 📱 相关资源
 

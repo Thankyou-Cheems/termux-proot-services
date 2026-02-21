@@ -138,3 +138,10 @@ A: 运行 `/opt/update-all.sh` 会自动备份所有配置
 
 ### Q: 更新失败怎么办
 A: 运行 `/opt/rollback.sh` 回滚到之前的版本
+
+## 8. 可选：部署 Aria2 + AriaNg + Caddy
+
+```bash
+# 在 Debian proot 中执行
+/opt/deploy-aria2.sh
+```

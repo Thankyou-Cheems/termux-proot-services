@@ -112,6 +112,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp -f "${SCRIPT_DIR}/update-all.sh" /opt/ 2>/dev/null || true
 cp -f "${SCRIPT_DIR}/update-asf.sh" /opt/ 2>/dev/null || true
 cp -f "${SCRIPT_DIR}/update-mcs.sh" /opt/ 2>/dev/null || true
+cp -f "${SCRIPT_DIR}/deploy-aria2.sh" /opt/ 2>/dev/null || true
 cp -f "${SCRIPT_DIR}/rollback.sh" /opt/ 2>/dev/null || true
 chmod +x /opt/*.sh 2>/dev/null || true
 
