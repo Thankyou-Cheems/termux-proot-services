@@ -1,0 +1,43 @@
+# Node modules
+node_modules/
+*/node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Runtime data
+*.db
+*.cache
+.pid
+*.pid.old
+
+# Backup
+backups/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config with secrets
+*/config/*.json
+!*/config/.gitkeep
+!.gitignore
+
+# Temporary files
+tmp/
+temp/
+/tmp/
+*.zip
+*.tar.gz
+
+# proot specific
+/linkerconfig/
