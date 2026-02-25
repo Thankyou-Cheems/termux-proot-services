@@ -1,5 +1,15 @@
 # termux-proot-services
 
+> [!WARNING]
+> **Legacy / 已废弃**
+>
+> This repository is no longer maintained.
+> Please use the new repository:
+> `https://github.com/Thankyou-Cheems/termux-debian-chroot-homelab`
+>
+> 本仓库已停止维护，请迁移到新仓库：
+> `https://github.com/Thankyou-Cheems/termux-debian-chroot-homelab`
+
 在 Android Termux + Debian proot-distro 场景下，提供可恢复、可维护、可审计的服务运维脚本与模板。
 
 ## Current Architecture
